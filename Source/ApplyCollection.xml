@@ -1,0 +1,119 @@
+<gel:script xmlns:core="jelly:core" xmlns:file="jelly:com.niku.union.gel.FileTagLibrary" xmlns:gel="jelly:com.niku.union.gel.GELTagLibrary"
+  xmlns:q="http://www.niku.com/xog/Query" xmlns:soap="jelly:com.niku.union.gel.SOAPTagLibrary"
+  xmlns:soap-env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:sql="jelly:sql"
+  xmlns:util="jelly:util" xmlns:xog="http://www.niku.com/xog" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+   	<!--============================================================-->
+	<!-- Package: Demo Data Collections 							-->
+	<!-- Process: Demo Data Apply Collection 						-->
+	<!-- Step	: Apply Collection									-->
+	<!-- Action	: Apply Collection									-->
+   	<!--============================================================-->
+	<!-- Apply new Demo Data Collection 			 				-->
+   	<!--============================================================-->
+  <core:set var="vFound">0</core:set>
+  <core:set value="${gel_objectInstanceId}" var="vCollectionID"/>
+  <core:if test="${DebugLevel > 0}">
+    <gel:log level="debug" message="Start Script"/>
+    <gel:log level="debug" message=">>Persisted XOG URL  : ${XOGURL}"/>
+    <gel:log level="debug" message=">>Persisted SessionID: ${sessionID}"/>
+    <gel:log level="debug" message=">>Persisted DebugLevel: ${DebugLevel}"/>
+  </core:if>
+  <gel:setDataSource dbId="Niku"/>
+  <sql:update escapeText="false">
+		update ODF_CA_DDATA_INSTANCE
+		set instance_status = 'Original'
+		where instance_status = 'Error'
+		and odf_parent_id = ${vCollectionID}
+	</sql:update>
+  <sql:update escapeText="false">
+		update ODF_CA_DDATA_INSTANCE
+		set instance_status = 'Error'
+		where instance_status = 'Original'
+		and ((length(new_name) &gt; name_max_length) or 
+			 (length(new_description) &gt; desc_max_length) or 
+			 (new_name is null))
+		and odf_parent_id = ${vCollectionID}
+	</sql:update>
+  <sql:query escapeText="false" var="vCollection">
+		select di.instance_type, di.new_name, di.new_description, di.instance_code, di.id
+		from odf_ca_ddata_instance di
+		where di.odf_parent_id = ${vCollectionID} and di.instance_status = 'Original'
+	</sql:query>
+  <core:forEach items="${vCollection.rowsByIndex}" var="row">
+    <core:set value="${row[0]}" var="vInstType"/>
+    <core:set value="${row[1]}" var="vInstName"/>
+    <core:set value="${row[2]}" var="vInstDesc"/>
+    <core:set value="${row[3]}" var="vInstPKID"/>
+    <core:set value="${row[4]}" var="vInstINTL"/>
+    <core:if test="${DebugLevel > 0}">
+      <gel:log level="debug" message="Data Instance: ${vInstType} - ${vInstPKID}"/>
+    </core:if>
+    <core:switch on="${vInstType}">
+      <core:case value="Portfolio">
+        <sql:update escapeText="false">
+					update pma_portfolios set name='${vInstName}', Description='${vInstDesc}'
+					where unique_name='${vInstPKID}'
+				</sql:update>
+      </core:case>
+      <core:case value="Department">
+        <sql:update escapeText="false">
+					update departments set shortdesc='${vInstName}', Description='${vInstDesc}'
+					where departcode='${vInstPKID}'
+				</sql:update>
+      </core:case>
+      <core:case value="Project">
+        <sql:update escapeText="false">
+					update inv_investments set name='${vInstName}'
+					where code='${vInstPKID}'
+				</sql:update>
+        <sql:update escapeText="false">
+					update odf_ca_inv set obj_objective='${vInstDesc}'
+					where id = (select id from inv_investments where code='${vInstPKID}')
+				</sql:update>
+      </core:case>
+      <core:case value="Idea">
+        <sql:update escapeText="false">
+					update inv_investments set name='${vInstName}'
+					where code='${vInstPKID}'
+				</sql:update>
+        <sql:update escapeText="false">
+					update odf_ca_inv set obj_objective='${vInstDesc}'
+					where id = (select id from inv_investments where code='${vInstPKID}')
+				</sql:update>
+      </core:case>
+      <core:case value="Service">
+        <sql:update escapeText="false">
+					update inv_investments set name='${vInstName}'
+					where code='${vInstPKID}'
+				</sql:update>
+        <sql:update escapeText="false">
+					update odf_ca_service set service_Description='${vInstDesc}'
+					where id = (select id from inv_investments where code='${vInstPKID}')
+				</sql:update>
+      </core:case>
+      <core:case value="OBS_Type">
+        <sql:update escapeText="false">
+					update prj_obs_types set name='${vInstName}', description='${vInstDesc}'
+					where unique_name='${vInstPKID}'
+				</sql:update>
+      </core:case>
+      <core:case value="OBS_Unit">
+        <sql:update escapeText="false">
+					update prj_obs_units set name='${vInstName}'
+					where id='${vInstPKID}'
+				</sql:update>
+      </core:case>
+      <core:default>
+        <sql:update escapeText="false">
+					update inv_investments set name='${vInstName}', description='${vInstDesc}'
+					where code='${vInstPKID}'
+				</sql:update>
+      </core:default>
+    </core:switch>
+    <sql:update escapeText="false">
+			update odf_ca_ddata_instance
+			set instance_status = 'Applied'
+			where id = ${vInstINTL}
+		</sql:update>
+  </core:forEach>
+</gel:script>

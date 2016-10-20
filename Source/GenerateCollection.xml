@@ -1,0 +1,647 @@
+<gel:script xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:core="jelly:core"
+    xmlns:file="jelly:com.niku.union.gel.FileTagLibrary"
+    xmlns:gel="jelly:com.niku.union.gel.GELTagLibrary"
+    xmlns:soap="jelly:com.niku.union.gel.SOAPTagLibrary"
+    xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+    xmlns:sql="jelly:sql" xmlns:xog="http://www.niku.com/xog"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+   	<!--============================================================-->
+	<!-- Package: Demo Data Collections 							-->
+	<!-- Process: Demo Data Generate Collection 					-->
+	<!-- Step	: Generate Collection	            				-->
+	<!-- Action	: Generate Collection 								-->
+   	<!--============================================================-->
+	<!-- Object : Demo Data Collection								-->
+   	<!--============================================================-->
+	<!-- Captures data into the Demo Data Collection Utility 		-->
+   	<!--============================================================-->
+	 
+	<core:if test="${DebugLevel &gt; 0}">
+		<gel:log level="debug" message="Start Script"/>
+		<gel:log level="debug" message=">>Persisted XOG URL   : ${XOGURL}"/> 
+		<gel:log level="debug" message=">>Persisted LOG Folder: ${XOGlogFolder}"/> 
+		<gel:log level="debug" message=">>Persisted WEB Folder: ${XOGwebFolder}"/> 
+		<gel:log level="debug" message=">>Persisted SessionID : ${sessionID}"/> 
+		<gel:log level="debug" message=">>Persisted DebugLevel: ${DebugLevel}"/> 
+		<gel:log level="debug" message=">>Persisted dbVendor  : ${dbVendor}"/>
+		<gel:log level="debug" message=">>Persisted dbOwner   : ${dbOwner}"/> 
+		<gel:log level="debug" message=">>Process Instance	  : ${gel_processInstanceId}"/>
+	</core:if>
+	
+	<core:set var="vFound">0</core:set>
+	<core:set value="${gel_objectInstanceId}" var="vCollectionID"/>
+	<core:if test="${DebugLevel > 0}">
+		<gel:log level="debug" message="Start Script"/>
+		<gel:log level="debug" message=">>Persisted XOG URL  : ${XOGURL}"/>
+		<gel:log level="debug" message=">>Persisted SessionID: ${sessionID}"/>
+		<gel:log level="debug" message=">>Persisted DebugLevel: ${DebugLevel}"/>
+	</core:if>
+	<gel:setDataSource dbId="Niku"/>
+	<gel:parse var="v_xml_root">
+		<NikuDataBus xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../xsd/nikuxog_customObjectInstance.xsd">
+		  <Header action="write" externalSource="NIKU" objectType="customObjectInstance" version="14"/>
+		  <customObjectInstances objectCode="ddata_instance"/>
+		</NikuDataBus>
+	</gel:parse>
+	<sql:query escapeText="false" var="vAutonum">
+			select ss.next_value from cmn_autonum_Scheme_segments ss inner join cmn_autonum_schemes s on s.id = ss.scheme_id 
+			where s.object_code = 'ddata_instance' and s.attribute_code = 'code'
+	</sql:query>
+	<core:forEach items="${vAutonum.rowsByIndex}" var="row">
+		<core:set value="${row[0]}" var="vNextNum"/>
+	</core:forEach>
+	<sql:query escapeText="false" var="vCollection">
+		select Code, Name, flag_portfolios, flag_investments, flag_departments, flag_resources, flag_OBS_Types, flag_OBS_Units, source_partition
+		from ODF_CA_DDATA_COLLECTION
+		Where ID = ${vCollectionID}
+	</sql:query>
+	<core:forEach items="${vCollection.rowsByIndex}" var="row">
+		<core:set value="${row[0]}" var="vCollCode"/>
+		<core:set value="${row[1]}" var="vCollName"/>
+		<core:set value="${row[2]}" var="vCollFlagPortfs"/>
+		<core:set value="${row[3]}" var="vCollFlagInvest"/>
+		<core:set value="${row[4]}" var="vCollFlagDepart"/>
+		<core:set value="${row[5]}" var="vCollFlagResour"/>
+		<core:set value="${row[6]}" var="vCollFlagOBSType"/>
+		<core:set value="${row[7]}" var="vCollFlagOBSUnit"/>
+		<core:set value="${row[8]}" var="vCollPartition"/>
+		<core:if test="${DebugLevel > 0}">
+			<gel:log level="debug" message="Collection: ${vCollCode} - ${vCollName}"/>
+			<gel:log level="debug" message="--Collection Flags: Portfolio:${vCollFlagPortfs}; Investments:${vCollFlagInvest}; Departments:${vCollFlagDepart}; Resources: ${vCollFlagResour}; OBS Types:${vCollFlagOBSType}; OBS Units:${vCollFlagOBSUnit};"/>
+			<gel:log level="debug" message="--Collection Partition: ${vCollPartition}"/>
+		</core:if>
+		<!-- Check and Collect Portfolios -->
+		<core:if test="${vCollFlagPortfs==1}">
+			<sql:query escapeText="false" var="vPortfolios">
+				select X.attribute, X.attribute_name, X.table_name, X.max_length, X.string_value, X.code, X.id
+				from (
+					select 'name' attribute, 'Name' attribute_name, 'PFM_PORTFOLIOS' table_name, 32  max_length, p.Name string_value, p.code, p.ID
+					from pfm_portfolios p inner join odf_Ca_pfm_portfolio o on p.id = o.id
+					where o.partition_code = '${vCollPartition}'
+					and not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'Portfolio' and instance_code = p.code and odf_parent_id = ${vCollectionID} and attribute='name' )
+					and p.is_Active = 1
+					UNION
+					select 'description' attribute, 'Description' attribute_name, 'PFM_PORTFOLIOS' table_name, 256 max_length, p.description string_value, p.code, p.ID
+					from pfm_portfolios p inner join odf_Ca_pfm_portfolio o on p.id = o.id
+					where o.partition_code = '${vCollPartition}' 
+					and not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'Portfolio' and instance_code = p.code and odf_parent_id = ${vCollectionID} and attribute='description')
+					and p.is_Active = 1
+				) X
+				WHERE CMN_NVL_FCT(X.STRING_VALUE,'this is an empty string') != 'this is an empty string'
+			</sql:query>
+			<core:forEach items="${vPortfolios.rowsByIndex}" var="row">
+				<core:set value="${row[0]}" var="vAttr"/>
+				<core:set value="${row[1]}" var="vAttrName"/>
+				<core:set value="${row[2]}" var="vTable"/>
+				<core:set value="${row[3]}" var="vMaxLength"/>
+				<core:set value="${row[4]}" var="vName"/>
+				<core:set value="${row[5]}" var="vCode"/>
+				<core:set value="${row[6]}" var="vIntl"/>
+				<core:set value="${vNextNum}" var="vInstanceCode"/>
+				<core:set value="${vNextNum+1}" var="vNextNum"/>
+				<core:set value="Portfolio:${vCollCode}:${vCode}" var="vInstanceName"/>
+				<gel:parse var="v_xml_instance">
+					<instance instanceCode="${vInstanceCode}" objectCode="ddata_instance" parentInstanceCode="${vCollCode}" parentObjectCode="ddata_collection">
+						<CustomInformation>
+							<ColumnValue name="partition_code">NIKU.ROOT</ColumnValue>
+							<ColumnValue name="original_name">${vName}</ColumnValue>
+							<ColumnValue name="attribute">${vAttr}</ColumnValue>
+							<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
+							<ColumnValue name="table_name">${vTable}</ColumnValue>
+							<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
+							<ColumnValue name="url"><![CDATA[/niku/nu#action:pfm.portfolioDefaultTab&odf_return_to=pfm.portfolioList&id=${vIntl}]]></ColumnValue>
+							<ColumnValue name="instance_type">Portfolio</ColumnValue>
+							<ColumnValue name="instance_code">${vCode}</ColumnValue>
+							<ColumnValue name="name">${vInstanceName}</ColumnValue>
+							<ColumnValue name="code">${vInstanceCode}</ColumnValue>
+							<ColumnValue name="url_enable">true</ColumnValue>
+						</CustomInformation>
+						<OBSAssocs completed="false"/>
+						<Security>
+						  <UserSecurity rightCode="odf_cst_ddata_instance_edit" userName="admin"/>
+						</Security>
+					  </instance>
+				</gel:parse>
+				<gel:set insert="true" select="$v_xml_root/NikuDataBus/customObjectInstances" value="${v_xml_instance}"/>
+		  </core:forEach>
+		</core:if>
+		<!-- Check and Collect Investments -->
+		<core:if test="${vCollFlagInvest==1}">
+			<sql:query escapeText="false" var="vInvestmentTypes">
+					select MVL.VALUE , L.Lookup_code, substr(l.lookup_code,1,2), lower(MVL.Value)
+					from odf_multi_valued_lookups mvl inner join cmn_lookups l on l.lookup_type='DDATA_INSTANCE_TYPE' and upper(l.lookup_code)=MVL.value
+					where mvl.attribute='investment_types' and mvl.object = 'ddata_collection' and mvl.pk_id = ${vCollectionID}
+			</sql:query>
+			<core:forEach items="${vInvestmentTypes.rowsByIndex}" var="row">
+				<core:set value="${row[0]}" var="vInvType"/>
+				<core:set value="${row[1]}" var="vInvType2"/>
+				<core:set value="${row[2]}" var="vInvType3"/>
+				<core:set value="${row[3]}" var="vInvType4"/>
+				<core:if test="${DebugLevel > 0}">
+					<gel:log level="debug" message="-- Found Inv Type: ${vInvType}-${vInvType2}-${vInvType3}"/>
+				</core:if>
+				<core:switch on="${vInvType}">
+					<core:case value="SERVICE">
+						<sql:query escapeText="false" var="vInvestments">
+							select X.attribute, X.attribute_name, X.table_name, X.max_length, X.string_value, X.code, X.id
+							from (
+								select 'name' attribute, 'Name' attribute_name, 'INV_INVESTMENTS' table_name, 80 max_length, I.Name string_value, I.code, I.ID
+								from inv_investments I inner join odf_Ca_service o on o.id = i.id
+								where o.partition_code = '${vCollPartition}'
+								and not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'Service' and instance_code = I.code and odf_parent_id = ${vCollectionID})
+								and I.is_Active = 1
+								UNION
+								select 'description' attribute, 'Description' attribute_name, 'INV_INVESTMENTS' table_name, 762 max_length, I.Description string_value, I.code, I.ID
+								from inv_investments I inner join odf_Ca_service o on o.id = i.id
+								where o.partition_code = '${vCollPartition}'
+								and not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'Service' and instance_code = I.code and odf_parent_id = ${vCollectionID})
+								and I.is_Active = 1
+							) X
+							WHERE CMN_NVL_FCT(X.STRING_VALUE,'this is an empty string') != 'this is an empty string'
+						</sql:query>
+						<core:forEach items="${vInvestments.rowsByIndex}" var="row">
+							<core:set value="${row[0]}" var="vAttr"/>
+							<core:set value="${row[1]}" var="vAttrName"/>
+							<core:set value="${row[2]}" var="vTable"/>
+							<core:set value="${row[3]}" var="vMaxLength"/>
+							<core:set value="${row[4]}" var="vName"/>
+							<core:set value="${row[5]}" var="vCode"/>
+							<core:set value="${row[6]}" var="vIntl"/>
+							<core:set value="${vNextNum}" var="vInstanceCode"/>
+							<core:set value="${vNextNum+1}" var="vNextNum"/>
+							<core:set value="Service:${vCollCode}:${vCode}" var="vInstanceName"/>
+							<gel:parse var="v_xml_instance">
+								<instance instanceCode="${vInstanceCode}" objectCode="ddata_instance" parentInstanceCode="${vCollCode}" parentObjectCode="ddata_collection">
+								  <CustomInformation>
+									<ColumnValue name="partition_code">NIKU.ROOT</ColumnValue>
+									<ColumnValue name="original_name">${vName}</ColumnValue>
+									<ColumnValue name="attribute">${vAttr}</ColumnValue>
+									<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
+									<ColumnValue name="table_name">${vTable}</ColumnValue>
+									<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
+									<ColumnValue name="url"><![CDATA[/niku/nu#action:service.serviceUpdateView&id=${vIntl}&return_to=service.serviceList&odf_view=serviceUpdate]]></ColumnValue>
+									<ColumnValue name="instance_type">Service</ColumnValue>
+									<ColumnValue name="instance_code">${vCode}</ColumnValue>
+									<ColumnValue name="name">${vInstanceName}</ColumnValue>
+									<ColumnValue name="code">${vInstanceCode}</ColumnValue>
+									<ColumnValue name="url_enable">true</ColumnValue>
+								  </CustomInformation>
+								  <OBSAssocs completed="false"/>
+								  <Security>
+									<UserSecurity rightCode="odf_cst_ddata_instance_edit" userName="admin"/>
+								  </Security>
+								</instance>
+							</gel:parse>
+							<gel:set insert="true" select="$v_xml_root/NikuDataBus/customObjectInstances" value="${v_xml_instance}"/>
+						</core:forEach>
+					</core:case>
+					<core:case value="IDEA">
+						<sql:query escapeText="false" var="vInvestments">
+							select X.attribute, X.attribute_name, X.table_name, X.max_length, X.string_value, X.code, X.id
+							from (
+								select 'name' attribute, 'Name' attribute_name, 'INV_INVESTMENTS' table_name, 80 max_length, I.Name string_value, I.code, I.ID
+								from inv_investments I inner join odf_ca_idea o on o.id = i.id
+								where o.partition_code = '${vCollPartition}'
+								and not exists (select 'x' from odf_ca_ddata_instance where instance_type = '${vInvType2}' and instance_code = I.code and odf_parent_id = ${vCollectionID})
+								and I.is_Active = 1
+								UNION
+								select 'description' attribute, 'Description' attribute_name, 'INV_INVESTMENTS' table_name, 2000 max_length, I.Description string_value, I.code, I.ID
+								from inv_investments I inner join odf_ca_idea o on o.id = i.id
+								where o.partition_code = '${vCollPartition}'
+								and not exists (select 'x' from odf_ca_ddata_instance where instance_type = '${vInvType2}' and instance_code = I.code and odf_parent_id = ${vCollectionID})
+								and I.is_Active = 1
+								UNION
+								select 'obj_objective' attribute, 'Objective' attribute_name, 'ODF_CA_IDEA' table_name, 2000 max_length, O.OBJ_OBJECTIVE string_value, I.code, I.ID
+								from inv_investments I inner join odf_ca_idea o on o.id = i.id
+								where o.partition_code = '${vCollPartition}'
+								and not exists (select 'x' from odf_ca_ddata_instance where instance_type = '${vInvType2}' and instance_code = I.code and odf_parent_id = ${vCollectionID})
+								and I.is_Active = 1
+							) X
+							WHERE CMN_NVL_FCT(X.STRING_VALUE,'this is an empty string') != 'this is an empty string'
+						</sql:query>
+						<core:forEach items="${vInvestments.rowsByIndex}" var="row">
+							<core:set value="${row[0]}" var="vAttr"/>
+							<core:set value="${row[1]}" var="vAttrName"/>
+							<core:set value="${row[2]}" var="vTable"/>
+							<core:set value="${row[3]}" var="vMaxLength"/>
+							<core:set value="${row[4]}" var="vName"/>
+							<core:set value="${row[5]}" var="vCode"/>
+							<core:set value="${row[6]}" var="vIntl"/>
+							<core:set value="${vNextNum}" var="vInstanceCode"/>
+							<core:set value="${vNextNum+1}" var="vNextNum"/>
+							<core:set value="Idea:${vCollCode}:${vCode}" var="vInstanceName"/>
+							<gel:parse var="v_xml_instance">
+								<instance instanceCode="${vInstanceCode}" objectCode="ddata_instance" parentInstanceCode="${vCollCode}" parentObjectCode="ddata_collection">
+								  <CustomInformation>
+									<ColumnValue name="partition_code">NIKU.ROOT</ColumnValue>
+									<ColumnValue name="original_name">${vName}</ColumnValue>
+									<ColumnValue name="attribute">${vAttr}</ColumnValue>
+									<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
+									<ColumnValue name="table_name">${vTable}</ColumnValue>
+									<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
+									<ColumnValue name="url"><![CDATA[/niku/nu#action:pma.ideaProperties&id=${vIntl}&return_to=pma.ideaList]]></ColumnValue>
+									<ColumnValue name="instance_type">Idea</ColumnValue>
+									<ColumnValue name="instance_code">${vCode}</ColumnValue>
+									<ColumnValue name="name">${vInstanceName}</ColumnValue>
+									<ColumnValue name="code">${vInstanceCode}</ColumnValue>
+									<ColumnValue name="url_enable">true</ColumnValue>
+								  </CustomInformation>
+								  <OBSAssocs completed="false"/>
+								  <Security>
+									<UserSecurity rightCode="odf_cst_ddata_instance_edit" userName="admin"/>
+								  </Security>
+								</instance>
+							</gel:parse>
+							<gel:set insert="true" select="$v_xml_root/NikuDataBus/customObjectInstances" value="${v_xml_instance}"/>
+						</core:forEach>
+					</core:case>
+					<core:case value="PROJECT">
+						<sql:query escapeText="false" var="vInvestments">
+							select X.attribute, X.attribute_name, X.table_name, X.max_length, X.string_value, X.code, X.id
+							from (
+								select 'name' attribute, 'Name' attribute_name, 'INV_INVESTMENTS' table_name, 80 max_length, I.Name string_value, I.code, I.ID
+								from inv_investments I inner join odf_ca_project o on o.id = i.id
+								where o.partition_code = '${vCollPartition}'
+								and not exists (select 'x' from odf_ca_ddata_instance where instance_type = '${vInvType2}' and instance_code = I.code and odf_parent_id = ${vCollectionID})
+								and I.is_Active = 1
+								UNION
+								select 'description' attribute, 'Description' attribute_name, 'INV_INVESTMENTS' table_name, 2000 max_length, I.Description string_value, I.code, I.ID
+								from inv_investments I inner join odf_ca_project o on o.id = i.id
+								where o.partition_code = '${vCollPartition}'
+								and not exists (select 'x' from odf_ca_ddata_instance where instance_type = '${vInvType2}' and instance_code = I.code and odf_parent_id = ${vCollectionID})
+								and I.is_Active = 1
+								UNION
+								select 'obj_objective' attribute, 'Objective' attribute_name, 'ODF_CA_PROJECT' table_name, 2000 max_length, O.OBJ_OBJECTIVE string_value, I.code, I.ID
+								from inv_investments I inner join odf_ca_project o on o.id = i.id
+								where o.partition_code = '${vCollPartition}'
+								and not exists (select 'x' from odf_ca_ddata_instance where instance_type = '${vInvType2}' and instance_code = I.code and odf_parent_id = ${vCollectionID})
+								and I.is_Active = 1
+							) X
+							WHERE CMN_NVL_FCT(X.STRING_VALUE,'this is an empty string') != 'this is an empty string'
+						</sql:query>
+						<core:forEach items="${vInvestments.rowsByIndex}" var="row">
+							<core:set value="${row[0]}" var="vAttr"/>
+							<core:set value="${row[1]}" var="vAttrName"/>
+							<core:set value="${row[2]}" var="vTable"/>
+							<core:set value="${row[3]}" var="vMaxLength"/>
+							<core:set value="${row[4]}" var="vName"/>
+							<core:set value="${row[5]}" var="vCode"/>
+							<core:set value="${row[6]}" var="vIntl"/>
+							<core:set value="${vNextNum}" var="vInstanceCode"/>
+							<core:set value="${vNextNum+1}" var="vNextNum"/>
+							<core:set value="Project:${vCollCode}:${vCode}" var="vInstanceName"/>
+							<gel:parse var="v_xml_instance">
+								<instance instanceCode="${vInstanceCode}" objectCode="ddata_instance" parentInstanceCode="${vCollCode}" parentObjectCode="ddata_collection">
+								  <CustomInformation>
+									<ColumnValue name="partition_code">NIKU.ROOT</ColumnValue>
+									<ColumnValue name="original_name">${vName}</ColumnValue>
+									<ColumnValue name="attribute">${vAttr}</ColumnValue>
+									<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
+									<ColumnValue name="table_name">${vTable}</ColumnValue>
+									<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
+									<ColumnValue name="url"><![CDATA[/niku/nu#action:projmgr.projectProperties&id=${vIntl}]]></ColumnValue>
+									<ColumnValue name="instance_type">Project</ColumnValue>
+									<ColumnValue name="instance_code">${vCode}</ColumnValue>
+									<ColumnValue name="name">${vInstanceName}</ColumnValue>
+									<ColumnValue name="code">${vInstanceCode}</ColumnValue>
+									<ColumnValue name="url_enable">true</ColumnValue>
+								  </CustomInformation>
+								  <OBSAssocs completed="false"/>
+								  <Security>
+									<UserSecurity rightCode="odf_cst_ddata_instance_edit" userName="admin"/>
+								  </Security>
+								</instance>
+							</gel:parse>
+							<gel:set insert="true" select="$v_xml_root/NikuDataBus/customObjectInstances" value="${v_xml_instance}"/>
+						</core:forEach>
+					</core:case>
+					<core:default>
+						<sql:query escapeText="false" var="vInvestments">
+							select X.attribute, X.attribute_name, X.table_name, X.max_length, X.string_value, X.code, X.id
+							from (
+								select 'name' attribute, 'Name' attribute_name, 'INV_INVESTMENTS' table_name, 80 max_length, I.Name string_value, I.code, I.ID
+								from inv_investments I inner join odf_Ca_${vInvType} o on o.id = i.id
+								where o.partition_code = '${vCollPartition}'
+								and not exists (select 'x' from odf_ca_ddata_instance where instance_type = '${vInvType2}' and instance_code = I.code and odf_parent_id = ${vCollectionID})
+								and I.is_Active = 1
+								UNION
+								select 'description' attribute, 'Description' attribute_name, 'INV_INVESTMENTS' table_name, 762 max_length, I.Description string_value, I.code, I.ID
+								from inv_investments I inner join odf_Ca_${vInvType} o on o.id = i.id
+								where o.partition_code = '${vCollPartition}'
+								and not exists (select 'x' from odf_ca_ddata_instance where instance_type = '${vInvType2}' and instance_code = I.code and odf_parent_id = ${vCollectionID})
+								and I.is_Active = 1
+							) X
+							WHERE CMN_NVL_FCT(X.STRING_VALUE,'this is an empty string') != 'this is an empty string'
+						</sql:query>
+						<core:forEach items="${vInvestments.rowsByIndex}" var="row">
+							<core:set value="${row[0]}" var="vAttr"/>
+							<core:set value="${row[1]}" var="vAttrName"/>
+							<core:set value="${row[2]}" var="vTable"/>
+							<core:set value="${row[3]}" var="vMaxLength"/>
+							<core:set value="${row[4]}" var="vName"/>
+							<core:set value="${row[5]}" var="vCode"/>
+							<core:set value="${row[6]}" var="vIntl"/>
+							<core:set value="${vNextNum}" var="vInstanceCode"/>
+							<core:set value="${vNextNum+1}" var="vNextNum"/>
+							<core:set value="${vInvType2}:${vCollCode}:${vCode}" var="vInstanceName"/>
+							<gel:parse var="v_xml_instance">
+								<instance instanceCode="${vInstanceCode}" objectCode="ddata_instance" parentInstanceCode="${vCollCode}" parentObjectCode="ddata_collection">
+								  <CustomInformation>
+									<ColumnValue name="partition_code">NIKU.ROOT</ColumnValue>
+									<ColumnValue name="original_name">${vName}</ColumnValue>
+									<ColumnValue name="attribute">${vAttr}</ColumnValue>
+									<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
+									<ColumnValue name="table_name">${vTable}</ColumnValue>
+									<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
+									<ColumnValue name="url"><![CDATA[/niku/nu#action:projmgr.${vInvType4}Properties&id=${vIntl}&return_to=projmgr.${vInvType4}s&investment_code=${vInvType}]]></ColumnValue>
+									<ColumnValue name="instance_type">${vInvType2}</ColumnValue>
+									<ColumnValue name="instance_code">${vCode}</ColumnValue>
+									<ColumnValue name="name">${vInstanceName}</ColumnValue>
+									<ColumnValue name="code">${vInstanceCode}</ColumnValue>
+									<ColumnValue name="url_enable">true</ColumnValue>
+								  </CustomInformation>
+								  <OBSAssocs completed="false"/>
+								  <Security>
+									<UserSecurity rightCode="odf_cst_ddata_instance_edit" userName="admin"/>
+								  </Security>
+								</instance>
+							</gel:parse>
+							<gel:set insert="true" select="$v_xml_root/NikuDataBus/customObjectInstances" value="${v_xml_instance}"/>
+						</core:forEach>
+					</core:default>
+				</core:switch>
+			</core:forEach>
+		</core:if>
+		<!-- Check and Collect Resources -->
+		<core:if test="${vCollFlagResour==1}">
+			<sql:query escapeText="false" var="vResources">
+				select X.attribute, X.attribute_name, X.table_name, X.max_length, X.string_value, X.code, X.id
+				from (
+					select 'last_name' attribute, 'Last Name' attribute_name, 'SRM_RESOURCES' table_name, 32 max_length, r.last_name string_value, r.unique_name code, r.ID
+					from srm_resources r inner join odf_Ca_resource o on r.id = o.id
+					where o.partition_code = '${vCollPartition}'
+					and not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'Resource' and instance_code = R.unique_name and odf_parent_id = ${vCollectionID})
+					UNION
+					select 'first_name' attribute, 'First Name' attribute_name, 'SRM_RESOURCES' table_name, 32 max_length, r.first_name string_value, r.unique_name code, r.ID
+					from srm_resources r inner join odf_Ca_resource o on r.id = o.id
+					where o.partition_code = '${vCollPartition}'
+					and not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'Resource' and instance_code = R.unique_name and odf_parent_id = ${vCollectionID})
+					UNION
+					select 'full_name' attribute, 'Full Name' attribute_name, 'SRM_RESOURCES' table_name, 32 max_length, r.full_name string_value, r.unique_name code, r.ID
+					from srm_resources r inner join odf_Ca_resource o on r.id = o.id
+					where o.partition_code = '${vCollPartition}'
+					and not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'Resource' and instance_code = R.unique_name and odf_parent_id = ${vCollectionID})
+					UNION
+					select 'email' attribute, 'Email' attribute_name, 'SRM_RESOURCES' table_name, 255 max_length, r.email string_value, r.unique_name code, r.ID
+					from srm_resources r inner join odf_Ca_resource o on r.id = o.id
+					where o.partition_code = '${vCollPartition}'
+					and not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'Resource' and instance_code = R.unique_name and odf_parent_id = ${vCollectionID})
+				) X
+				WHERE CMN_NVL_FCT(X.STRING_VALUE,'this is an empty string') != 'this is an empty string'
+			</sql:query>
+			<core:forEach items="${vResources.rowsByIndex}" var="row">
+				<core:set value="${row[0]}" var="vAttr"/>
+				<core:set value="${row[1]}" var="vAttrName"/>
+				<core:set value="${row[2]}" var="vTable"/>
+				<core:set value="${row[3]}" var="vMaxLength"/>
+				<core:set value="${row[4]}" var="vName"/>
+				<core:set value="${row[5]}" var="vCode"/>
+				<core:set value="${row[6]}" var="vIntl"/>
+				<core:set value="${vNextNum}" var="vInstanceCode"/>
+				<core:set value="${vNextNum+1}" var="vNextNum"/>
+				<core:set value="Resource:${vCollCode}:${vCode}" var="vInstanceName"/>
+				<gel:parse var="v_xml_instance">
+				  <instance instanceCode="${vInstanceCode}" objectCode="ddata_instance" parentInstanceCode="${vCollCode}" parentObjectCode="ddata_collection">
+					<CustomInformation>
+						<ColumnValue name="partition_code">NIKU.ROOT</ColumnValue>
+						<ColumnValue name="original_name">${vName}</ColumnValue>
+						<ColumnValue name="attribute">${vAttr}</ColumnValue>
+						<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
+						<ColumnValue name="table_name">${vTable}</ColumnValue>
+						<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
+						<ColumnValue name="url"><![CDATA[/niku/nu#action:projmgr.editResource&id=${vIntl}]]></ColumnValue>
+						<ColumnValue name="instance_type">Resource</ColumnValue>
+						<ColumnValue name="instance_code">${vCode}</ColumnValue>
+						<ColumnValue name="name">${vInstanceName}</ColumnValue>
+						<ColumnValue name="code">${vInstanceCode}</ColumnValue>
+						<ColumnValue name="url_enable">true</ColumnValue>
+					</CustomInformation>
+					<OBSAssocs completed="false"/>
+					<Security>
+					  <UserSecurity rightCode="odf_cst_ddata_instance_edit" userName="admin"/>
+					</Security>
+				  </instance>
+				</gel:parse>
+				<gel:set insert="true" select="$v_xml_root/NikuDataBus/customObjectInstances" value="${v_xml_instance}"/>
+			</core:forEach>
+		</core:if>
+		<!-- Check and Collect Departments -->
+		<core:if test="${vCollFlagDepart==1}">
+			<sql:query escapeText="false" var="vDepartments">
+				select X.attribute, X.attribute_name, X.table_name, X.max_length, X.string_value, X.code, X.id
+				from (
+					select 'description' attribute, 'Description' attribute_name, 'DEPARTMENTS' table_name, 240 max_length, d.description string_value, d.departcode code, d.ID
+					from departments d inner join odf_Ca_department o on d.id = o.id
+					where o.partition_code = '${vCollPartition}'
+					and not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'Department' and instance_code = D.departcode and odf_parent_id = ${vCollectionID})
+					UNION
+					select 'shortdesc' attribute, 'Short Description' attribute_name, 'DEPARTMENTS' table_name, 120 max_length, d.shortdesc string_value, d.departcode code, d.ID
+					from departments d inner join odf_Ca_department o on d.id = o.id
+					where o.partition_code = '${vCollPartition}'
+					and not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'Department' and instance_code = D.departcode and odf_parent_id = ${vCollectionID})
+				) X
+				WHERE CMN_NVL_FCT(X.STRING_VALUE,'this is an empty string') != 'this is an empty string'
+			</sql:query>
+			<core:forEach items="${vDepartments.rowsByIndex}" var="row">
+				<core:set value="${row[0]}" var="vAttr"/>
+				<core:set value="${row[1]}" var="vAttrName"/>
+				<core:set value="${row[2]}" var="vTable"/>
+				<core:set value="${row[3]}" var="vMaxLength"/>
+				<core:set value="${row[4]}" var="vName"/>
+				<core:set value="${row[5]}" var="vCode"/>
+				<core:set value="${row[6]}" var="vIntl"/>
+				<core:set value="${vNextNum}" var="vInstanceCode"/>
+				<core:set value="${vNextNum+1}" var="vNextNum"/>
+				<core:set value="Department:${vCollCode}:${vCode}" var="vInstanceName"/>
+				<gel:parse var="v_xml_instance">
+				  <instance instanceCode="${vInstanceCode}" objectCode="ddata_instance" parentInstanceCode="${vCollCode}" parentObjectCode="ddata_collection">
+					<CustomInformation>
+						<ColumnValue name="partition_code">NIKU.ROOT</ColumnValue>
+						<ColumnValue name="original_name">${vName}</ColumnValue>
+						<ColumnValue name="attribute">${vAttr}</ColumnValue>
+						<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
+						<ColumnValue name="table_name">${vTable}</ColumnValue>
+						<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
+						<ColumnValue name="url"><![CDATA[/niku/nu#action:revmgr.departmentProperties&odf_pk=${vIntl}&odf_view=departmentProperties]]></ColumnValue>
+						<ColumnValue name="instance_type">Department</ColumnValue>
+						<ColumnValue name="instance_code">${vCode}</ColumnValue>
+						<ColumnValue name="name">${vInstanceName}</ColumnValue>
+						<ColumnValue name="code">${vInstanceCode}</ColumnValue>
+						<ColumnValue name="url_enable">true</ColumnValue>
+					</CustomInformation>
+					<OBSAssocs completed="false"/>
+					<Security>
+					  <UserSecurity rightCode="odf_cst_ddata_instance_edit" userName="admin"/>
+					</Security>
+				  </instance>
+				</gel:parse>
+				<gel:set insert="true" select="$v_xml_root/NikuDataBus/customObjectInstances" value="${v_xml_instance}"/>
+			</core:forEach>
+		</core:if>
+		<!-- Check and Collect OBS Types  -->
+		<core:if test="${vCollFlagOBSType==1}">
+			<sql:query escapeText="false" var="vOBSType">
+				select X.attribute, X.attribute_name, X.table_name, X.max_length, X.string_value, X.code, X.id
+				from (
+					select 'name' attribute, 'Name' attribute_name, 'PRJ_OBS_TYPES' table_name, 240 max_length, ot.name string_value, ot.unique_name code, ot.ID
+					from prj_obs_types ot
+						inner join odf_multi_valued_lookups mvl1 on mvl1.attribute='obs_types' and mvl1.object = 'ddata_collection' and mvl1.value = ot.id 
+						and mvl1.pk_id = ${vCollectionID}
+					Where not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'OBS_Type' and instance_code = ot.unique_name and odf_parent_id = ${vCollectionID})
+					UNION
+					select 'description' attribute, 'Description' attribute_name, 'PRJ_OBS_TYPES' table_name, 720 max_length, ot.description string_value, ot.unique_name code, ot.ID
+					from prj_obs_types ot
+						inner join odf_multi_valued_lookups mvl1 on mvl1.attribute='obs_types' and mvl1.object = 'ddata_collection' and mvl1.value = ot.id 
+						and mvl1.pk_id = ${vCollectionID}
+					Where not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'OBS_Type' and instance_code = ot.unique_name and odf_parent_id = ${vCollectionID})
+				) X
+				WHERE CMN_NVL_FCT(X.STRING_VALUE,'this is an empty string') != 'this is an empty string'
+			</sql:query>
+			<core:forEach items="${vOBSType.rowsByIndex}" var="row">
+				<core:set value="${row[0]}" var="vAttr"/>
+				<core:set value="${row[1]}" var="vAttrName"/>
+				<core:set value="${row[2]}" var="vTable"/>
+				<core:set value="${row[3]}" var="vMaxLength"/>
+				<core:set value="${row[4]}" var="vName"/>
+				<core:set value="${row[5]}" var="vCode"/>
+				<core:set value="${row[6]}" var="vIntl"/>
+				<core:set value="${vNextNum}" var="vInstanceCode"/>
+				<core:set value="${vNextNum+1}" var="vNextNum"/>
+				<core:set value="OBS_Type:${vCollCode}:${vCode}" var="vInstanceName"/>
+				<gel:parse var="v_xml_instance">
+				  <instance instanceCode="${vInstanceCode}" objectCode="ddata_instance" parentInstanceCode="${vCollCode}" parentObjectCode="ddata_collection">
+					<CustomInformation>
+						<ColumnValue name="partition_code">NIKU.ROOT</ColumnValue>
+						<ColumnValue name="original_name">${vName}</ColumnValue>
+						<ColumnValue name="attribute">${vAttr}</ColumnValue>
+						<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
+						<ColumnValue name="table_name">${vTable}</ColumnValue>
+						<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
+						<ColumnValue name="url"><![CDATA[/niku/nu#action:projmgr.obsProperties&id=${vIntl}]]></ColumnValue>
+						<ColumnValue name="instance_type">OBS_Type</ColumnValue>
+						<ColumnValue name="instance_code">${vCode}</ColumnValue>
+						<ColumnValue name="name">${vInstanceName}</ColumnValue>
+						<ColumnValue name="code">${vInstanceCode}</ColumnValue>
+						<ColumnValue name="url_enable">true</ColumnValue>
+						<ColumnValue name="desc_max_length">720</ColumnValue>
+						<ColumnValue name="name_max_length">240</ColumnValue>
+					</CustomInformation>
+					<OBSAssocs completed="false"/>
+					<Security>
+					  <UserSecurity rightCode="odf_cst_ddata_instance_edit" userName="admin"/>
+					</Security>
+				  </instance>
+				</gel:parse>
+				<gel:set insert="true" select="$v_xml_root/NikuDataBus/customObjectInstances" value="${v_xml_instance}"/>
+			</core:forEach>
+		</core:if>
+		<!-- Check and Collect OBS Units -->
+		<core:if test="${vCollFlagOBSUnit==1}">
+			<sql:query escapeText="false" var="vOBSUnit">
+				select X.attribute, X.attribute_name, X.table_name, X.max_length, X.string_value, X.code, X.id
+				from (
+					select 'name' attribute, 'Name' attribute_name, 'PRJ_OBS_UNITS' table_name, 360 max_length, ou.name string_value, ou.unique_name code, ou.ID
+					from prj_obs_units ou
+						inner join odf_multi_valued_lookups mvl1 on mvl1.attribute='obs_types' and mvl1.object = 'ddata_collection' and mvl1.value = ou.type_id 
+							and mvl1.pk_id = ${vCollectionID}
+					Where not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'OBS_Unit' and instance_code = ou.id and odf_parent_id = ${vCollectionID})
+				) X
+				WHERE CMN_NVL_FCT(X.STRING_VALUE,'this is an empty string') != 'this is an empty string'
+			</sql:query>
+			<core:forEach items="${vOBSUnit.rowsByIndex}" var="row">
+				<core:set value="${row[0]}" var="vAttr"/>
+				<core:set value="${row[1]}" var="vAttrName"/>
+				<core:set value="${row[2]}" var="vTable"/>
+				<core:set value="${row[3]}" var="vMaxLength"/>
+				<core:set value="${row[4]}" var="vName"/>
+				<core:set value="${row[5]}" var="vCode"/>
+				<core:set value="${row[6]}" var="vIntl"/>
+				<core:set value="${vNextNum}" var="vInstanceCode"/>
+				<core:set value="${vNextNum+1}" var="vNextNum"/>
+				<core:set value="OBS_Unit:${vCollCode}:${vCode}" var="vInstanceName"/>
+				<gel:parse var="v_xml_instance">
+				  <instance instanceCode="${vInstanceCode}" objectCode="ddata_instance" parentInstanceCode="${vCollCode}" parentObjectCode="ddata_collection">
+					<CustomInformation>
+						<ColumnValue name="partition_code">NIKU.ROOT</ColumnValue>
+						<ColumnValue name="original_name">${vName}</ColumnValue>
+						<ColumnValue name="attribute">${vAttr}</ColumnValue>
+						<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
+						<ColumnValue name="table_name">${vTable}</ColumnValue>
+						<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
+						<ColumnValue name="url"><![CDATA[/niku/nu#action:projmgr.obsUnitProperties&id=${vIntl}]]></ColumnValue>
+						<ColumnValue name="instance_type">OBS_Unit</ColumnValue>
+						<ColumnValue name="instance_code">${vIntl}</ColumnValue>
+						<ColumnValue name="name">${vInstanceName}</ColumnValue>
+						<ColumnValue name="code">${vInstanceCode}</ColumnValue>
+						<ColumnValue name="url_enable">true</ColumnValue>
+						<ColumnValue name="name_max_length">360</ColumnValue>
+						<ColumnValue name="desc_max_length">0</ColumnValue>
+					</CustomInformation>
+					<OBSAssocs completed="false"/>
+					<Security>
+					  <UserSecurity rightCode="odf_cst_ddata_instance_edit" userName="admin"/>
+					</Security>
+				  </instance>
+				</gel:parse>
+				<gel:set insert="true" select="$v_xml_root/NikuDataBus/customObjectInstances" value="${v_xml_instance}"/>
+			</core:forEach>
+		</core:if>
+		<core:if test="${DebugLevel > 0}">
+			<gel:serialize fileName="${XOGwebFolder}/XOGWrite_Collection_${vCollectionID}.xml" var="${v_xml_root}"/>
+			<gel:log level="debug" message="XOG Write can be found at: ${XOGwebPath}/XOGWrite_Collection_${vCollectionID}.xml"/> 
+		</core:if>
+		<!-- Calling XOG-->
+		<core:catch var="v_xog_exception">
+			<soap:invoke endpoint="${XOGURL}/niku/xog" var="runresult">
+				<soap:message>
+					<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xog="http://www.niku.com/xog">
+						<soapenv:Header>
+							<xog:Auth>
+								<xog:SessionID>${sessionID}</xog:SessionID>
+							</xog:Auth>
+						</soapenv:Header>
+						<soapenv:Body>
+							<gel:include select="$v_xml_root/NikuDataBus"/>
+						</soapenv:Body>
+					</soapenv:Envelope>
+				</soap:message>
+			</soap:invoke>
+		</core:catch>
+		<core:choose>
+			<core:when test="${v_xog_exception != null}">
+				<gel:log category="XOG" level="ERROR">XOG operation failed: ${v_xog_exception}</gel:log>
+			</core:when>
+			<core:otherwise>
+				<gel:set select="$runresult/soapenv:Envelope/soapenv:Body/XOGOutput" var="writeOutputRoot"/>
+				<gel:set asString="true" select="$writeOutputRoot/Status/@state" var="XOGoutcome"/>
+				<gel:set asString="true" select="$writeOutputRoot/Records/Record" var="XOGoutputrecords"/>
+				<gel:set asString="true" select="$writeOutputRoot/Statistics/@totalNumberOfRecords" var="XOGtotalrecords"/>
+				<gel:set asString="true" select="$writeOutputRoot/Statistics/@insertedRecords" var="XOGinsertedrecords"/>
+				<gel:set asString="true" select="$writeOutputRoot/Statistics/@updatedRecords" var="XOGupdatedrecords"/>
+				<gel:set asString="true" select="$writeOutputRoot/Statistics/@failureRecords" var="XOGfailurerecords"/>
+				<!-- Check the XOG result -->
+				<gel:log category="XOG" level="INFO">Document import for ${vCollectionID} status:${XOGoutcome} Total Objs: ${XOGtotalrecords}, Total inserted: ${XOGinsertedrecords}, Total updated: ${XOGupdatedrecords}, Total failed: ${XOGfailurerecords}</gel:log>
+			</core:otherwise>
+		</core:choose>
+		<core:if test="${DebugLevel > 0}">
+			<gel:serialize fileName="${XOGwebFolder}/XOGResult_Collection_${vCollectionID}.xml" var="${runresult}"/>
+			<gel:log level="debug" message="XOG Result can be found at: ${XOGwebPath}/XOGResult_Collection_${vCollectionID}.xml"/> 
+		</core:if>
+		<sql:update>
+			update cmn_autonum_Scheme_segments set next_Value=${vNextNum}
+			where scheme_id = (Select s.id from cmn_autonum_schemes s where s.object_code = 'ddata_instance' and s.attribute_code = 'code')
+		</sql:update>
+	</core:forEach>
+</gel:script>
