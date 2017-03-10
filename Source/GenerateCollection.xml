@@ -53,7 +53,7 @@
 		<core:set value="${row[0]}" var="vNextNum"/>
 	</core:forEach>
 	<sql:query escapeText="false" var="vCollection">
-		select Code, Name, flag_portfolios, flag_investments, flag_departments, flag_resources, flag_OBS_Types, flag_OBS_Units, source_partition
+		select Code, Name, flag_portfolios, flag_investments, flag_departments, flag_resources, flag_OBS_Types, flag_OBS_Units, flag_custom, nvl(source_partition,'NIKU.ROOT')
 		from ODF_CA_DDATA_COLLECTION
 		Where ID = ${vCollectionID}
 	</sql:query>
@@ -66,10 +66,11 @@
 		<core:set value="${row[5]}" var="vCollFlagResour"/>
 		<core:set value="${row[6]}" var="vCollFlagOBSType"/>
 		<core:set value="${row[7]}" var="vCollFlagOBSUnit"/>
-		<core:set value="${row[8]}" var="vCollPartition"/>
+		<core:set value="${row[8]}" var="vCollFlagCustom"/>
+		<core:set value="${row[9]}" var="vCollPartition"/>
 		<core:if test="${DebugLevel > 0}">
 			<gel:log level="debug" message="Collection: ${vCollCode} - ${vCollName}"/>
-			<gel:log level="debug" message="--Collection Flags: Portfolio:${vCollFlagPortfs}; Investments:${vCollFlagInvest}; Departments:${vCollFlagDepart}; Resources: ${vCollFlagResour}; OBS Types:${vCollFlagOBSType}; OBS Units:${vCollFlagOBSUnit};"/>
+			<gel:log level="debug" message="--Collection Flags: Portfolio:${vCollFlagPortfs}; Investments:${vCollFlagInvest}; Departments:${vCollFlagDepart}; Resources: ${vCollFlagResour}; OBS Types:${vCollFlagOBSType}; OBS Units:${vCollFlagOBSUnit}; Custom:${vCollFlagCustom};"/>
 			<gel:log level="debug" message="--Collection Partition: ${vCollPartition}"/>
 		</core:if>
 		<!-- Check and Collect Portfolios -->
@@ -110,6 +111,7 @@
 							<ColumnValue name="attribute">${vAttr}</ColumnValue>
 							<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
 							<ColumnValue name="table_name">${vTable}</ColumnValue>
+							<ColumnValue name="instance_code">code</ColumnValue>
 							<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
 							<ColumnValue name="url"><![CDATA[/niku/nu#action:pfm.portfolioDefaultTab&odf_return_to=pfm.portfolioList&id=${vIntl}]]></ColumnValue>
 							<ColumnValue name="instance_type">Portfolio</ColumnValue>
@@ -180,6 +182,7 @@
 									<ColumnValue name="attribute">${vAttr}</ColumnValue>
 									<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
 									<ColumnValue name="table_name">${vTable}</ColumnValue>
+									<ColumnValue name="instance_code">code</ColumnValue>
 									<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
 									<ColumnValue name="url"><![CDATA[/niku/nu#action:service.serviceUpdateView&id=${vIntl}&return_to=service.serviceList&odf_view=serviceUpdate]]></ColumnValue>
 									<ColumnValue name="instance_type">Service</ColumnValue>
@@ -232,6 +235,10 @@
 							<core:set value="${vNextNum}" var="vInstanceCode"/>
 							<core:set value="${vNextNum+1}" var="vNextNum"/>
 							<core:set value="Idea:${vCollCode}:${vCode}" var="vInstanceName"/>
+							<core:set var="vAux" value=""/>
+							<core:if test="${vTable=='ODF_CA_IDEA'}">
+								<core:set var="vAux" value="INV_INVESTMENTS"/>
+							</core:if>
 							<gel:parse var="v_xml_instance">
 								<instance instanceCode="${vInstanceCode}" objectCode="ddata_instance" parentInstanceCode="${vCollCode}" parentObjectCode="ddata_collection">
 								  <CustomInformation>
@@ -240,6 +247,8 @@
 									<ColumnValue name="attribute">${vAttr}</ColumnValue>
 									<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
 									<ColumnValue name="table_name">${vTable}</ColumnValue>
+									<ColumnValue name="instance_code">code</ColumnValue>
+									<ColumnValue name="aux_table">${vAux}</ColumnValue>
 									<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
 									<ColumnValue name="url"><![CDATA[/niku/nu#action:pma.ideaProperties&id=${vIntl}&return_to=pma.ideaList]]></ColumnValue>
 									<ColumnValue name="instance_type">Idea</ColumnValue>
@@ -292,6 +301,10 @@
 							<core:set value="${vNextNum}" var="vInstanceCode"/>
 							<core:set value="${vNextNum+1}" var="vNextNum"/>
 							<core:set value="Project:${vCollCode}:${vCode}" var="vInstanceName"/>
+							<core:set var="vAux" value=""/>
+							<core:if test="${vTable=='ODF_CA_PROJECT'}">
+								<core:set var="vAux" value="INV_INVESTMENTS"/>
+							</core:if>
 							<gel:parse var="v_xml_instance">
 								<instance instanceCode="${vInstanceCode}" objectCode="ddata_instance" parentInstanceCode="${vCollCode}" parentObjectCode="ddata_collection">
 								  <CustomInformation>
@@ -300,6 +313,8 @@
 									<ColumnValue name="attribute">${vAttr}</ColumnValue>
 									<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
 									<ColumnValue name="table_name">${vTable}</ColumnValue>
+									<ColumnValue name="instance_code">code</ColumnValue>
+									<ColumnValue name="aux_table">${vAux}</ColumnValue>
 									<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
 									<ColumnValue name="url"><![CDATA[/niku/nu#action:projmgr.projectProperties&id=${vIntl}]]></ColumnValue>
 									<ColumnValue name="instance_type">Project</ColumnValue>
@@ -354,6 +369,7 @@
 									<ColumnValue name="attribute">${vAttr}</ColumnValue>
 									<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
 									<ColumnValue name="table_name">${vTable}</ColumnValue>
+									<ColumnValue name="instance_code">code</ColumnValue>
 									<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
 									<ColumnValue name="url"><![CDATA[/niku/nu#action:projmgr.${vInvType4}Properties&id=${vIntl}&return_to=projmgr.${vInvType4}s&investment_code=${vInvType}]]></ColumnValue>
 									<ColumnValue name="instance_type">${vInvType2}</ColumnValue>
@@ -420,6 +436,7 @@
 						<ColumnValue name="attribute">${vAttr}</ColumnValue>
 						<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
 						<ColumnValue name="table_name">${vTable}</ColumnValue>
+						<ColumnValue name="instance_key">unique_name</ColumnValue>
 						<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
 						<ColumnValue name="url"><![CDATA[/niku/nu#action:projmgr.editResource&id=${vIntl}]]></ColumnValue>
 						<ColumnValue name="instance_type">Resource</ColumnValue>
@@ -473,6 +490,7 @@
 						<ColumnValue name="attribute">${vAttr}</ColumnValue>
 						<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
 						<ColumnValue name="table_name">${vTable}</ColumnValue>
+						<ColumnValue name="instance_code">departcode</ColumnValue>
 						<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
 						<ColumnValue name="url"><![CDATA[/niku/nu#action:revmgr.departmentProperties&odf_pk=${vIntl}&odf_view=departmentProperties]]></ColumnValue>
 						<ColumnValue name="instance_type">Department</ColumnValue>
@@ -528,8 +546,9 @@
 						<ColumnValue name="attribute">${vAttr}</ColumnValue>
 						<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
 						<ColumnValue name="table_name">${vTable}</ColumnValue>
+						<ColumnValue name="instance_key">unique_name</ColumnValue>
 						<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
-						<ColumnValue name="url"><![CDATA[/niku/nu#action:projmgr.obsProperties&id=${vIntl}]]></ColumnValue>
+						<ColumnValue name="url"><![CDATA[/niku/nu#action:nmc.obsProperties&id=${vIntl}]]></ColumnValue>
 						<ColumnValue name="instance_type">OBS_Type</ColumnValue>
 						<ColumnValue name="instance_code">${vCode}</ColumnValue>
 						<ColumnValue name="name">${vInstanceName}</ColumnValue>
@@ -578,11 +597,12 @@
 						<ColumnValue name="original_name">${vName}</ColumnValue>
 						<ColumnValue name="attribute">${vAttr}</ColumnValue>
 						<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
+						<ColumnValue name="instance_key">unique_name</ColumnValue>
 						<ColumnValue name="table_name">${vTable}</ColumnValue>
 						<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
-						<ColumnValue name="url"><![CDATA[/niku/nu#action:projmgr.obsUnitProperties&id=${vIntl}]]></ColumnValue>
+						<ColumnValue name="url"><![CDATA[/niku/nu#action:nmc.obsUnitProperties&id=${vIntl}]]></ColumnValue>
 						<ColumnValue name="instance_type">OBS_Unit</ColumnValue>
-						<ColumnValue name="instance_code">${vIntl}</ColumnValue>
+						<ColumnValue name="instance_code">${vCode}</ColumnValue>
 						<ColumnValue name="name">${vInstanceName}</ColumnValue>
 						<ColumnValue name="code">${vInstanceCode}</ColumnValue>
 						<ColumnValue name="url_enable">true</ColumnValue>
@@ -598,6 +618,69 @@
 				<gel:set insert="true" select="$v_xml_root/NikuDataBus/customObjectInstances" value="${v_xml_instance}"/>
 			</core:forEach>
 		</core:if>
+		<!-- Check and Collect Custom Objects -->
+		<core:if test="${vCollFlagCustom==1}">
+			<sql:query escapeText="false" var="vCustomObjects">
+			       select mvl.value, cap.name
+				   from odf_multi_valued_lookups mvl 
+					 inner join odf_objects o on o.code = mvl.value
+					 inner join cmn_captions_nls CAP on CAP.table_name='ODF_OBJECTS' and CAP.PK_ID = O.ID and cap.language_code='en'
+				   where mvl.object='ddata_collection' 
+				   and mvl.attribute = 'custom_objects'
+				   and MVL.PK_ID = ${vCollectionID} 
+			</sql:query>
+			<core:forEach items="${vCustomObjects.rowsByIndex}" var="row">
+				<core:set value="${row[0]}" var="vCustomObjectCode"/>
+				<core:set value="${row[1]}" var="vCustomObjectName"/>
+				
+				<sql:query escapeText="false" var="vCustom">
+					select X.attribute, X.attribute_name, X.table_name, X.max_length, X.string_value, X.code, X.id
+					from (
+						select 'name' attribute, 'Name' attribute_name, 'ODF_CA_${vCustomObjectCode}' table_name, 80  max_length, o.Name string_value, o.code, o.ID
+						from ODF_CA_${vCustomObjectCode} o 
+						where o.partition_code = '${vCollPartition}'
+						and not exists (select 'x' from odf_ca_ddata_instance where instance_type = 'custom' and table_name = 'ODF_CA_${vCustomObjectCode}' and instance_code = o.code and odf_parent_id = ${vCollectionID} and attribute='name' )
+					) X
+					WHERE CMN_NVL_FCT(X.STRING_VALUE,'this is an empty string') != 'this is an empty string'
+				</sql:query>
+				<core:forEach items="${vCustom.rowsByIndex}" var="row">
+					<core:set value="${row[0]}" var="vAttr"/>
+					<core:set value="${row[1]}" var="vAttrName"/>
+					<core:set value="${row[2]}" var="vTable"/>
+					<core:set value="${row[3]}" var="vMaxLength"/>
+					<core:set value="${row[4]}" var="vName"/>
+					<core:set value="${row[5]}" var="vCode"/>
+					<core:set value="${row[6]}" var="vIntl"/>
+					<core:set value="${vNextNum}" var="vInstanceCode"/>
+					<core:set value="${vNextNum+1}" var="vNextNum"/>
+					<core:set value="${vCustomObjectName}:${vCollCode}:${vCode}" var="vInstanceName"/>
+					<gel:parse var="v_xml_instance">
+						<instance instanceCode="${vInstanceCode}" objectCode="ddata_instance" parentInstanceCode="${vCollCode}" parentObjectCode="ddata_collection">
+							<CustomInformation>
+								<ColumnValue name="partition_code">NIKU.ROOT</ColumnValue>
+								<ColumnValue name="original_name">${vName}</ColumnValue>
+								<ColumnValue name="attribute">${vAttr}</ColumnValue>
+								<ColumnValue name="attribute_name">${vAttrName}</ColumnValue>
+								<ColumnValue name="table_name">${vTable}</ColumnValue>
+								<ColumnValue name="name_max_length">${vMaxLength}</ColumnValue>
+								<ColumnValue name="url"><![CDATA[/niku/nu#action:odf.${vCustomObjectCode}Properties&id=${vIntl}]]></ColumnValue>
+								<ColumnValue name="instance_type">custom</ColumnValue>
+								<ColumnValue name="instance_code">${vCode}</ColumnValue>
+								<ColumnValue name="name">${vInstanceName}</ColumnValue>
+								<ColumnValue name="code">${vInstanceCode}</ColumnValue>
+								<ColumnValue name="url_enable">true</ColumnValue>
+							</CustomInformation>
+							<OBSAssocs completed="false"/>
+							<Security>
+							  <UserSecurity rightCode="odf_cst_ddata_instance_edit" userName="admin"/>
+							</Security>
+						  </instance>
+					</gel:parse>
+					<gel:set insert="true" select="$v_xml_root/NikuDataBus/customObjectInstances" value="${v_xml_instance}"/>
+			  </core:forEach>
+		  </core:forEach>
+		</core:if>
+
 		<core:if test="${DebugLevel > 0}">
 			<gel:serialize fileName="${XOGwebFolder}/XOGWrite_Collection_${vCollectionID}.xml" var="${v_xml_root}"/>
 			<gel:log level="debug" message="XOG Write can be found at: ${XOGwebPath}/XOGWrite_Collection_${vCollectionID}.xml"/> 

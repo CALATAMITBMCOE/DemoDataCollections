@@ -4,11 +4,11 @@
   xmlns:util="jelly:util" xmlns:xog="http://www.niku.com/xog" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
    	<!--============================================================-->
 	<!-- Package: Demo Data Collections 							-->
-	<!-- Process: Demo Data Apply Collection 						-->
-	<!-- Step	: Apply Collection									-->
-	<!-- Action	: Apply Collection									-->
+	<!-- Process: Demo Data Revert Collection 						-->
+	<!-- Step	: Revert Collection									-->
+	<!-- Action	: Revert Collection									-->
    	<!--============================================================-->
-	<!-- Apply new Demo Data Collection 			 				-->
+	<!-- Revert to ORiginal Demo Data Collection 			 		-->
    	<!--============================================================-->
   <core:set var="vFound">0</core:set>
   <core:set value="${gel_objectInstanceId}" var="vCollectionID"/>
@@ -22,7 +22,7 @@
   <sql:query escapeText="false" var="vCollection">
 		select di.instance_type, di.table_name, nvl(di.aux_table,'sem aux table'), di.attribute, di.instance_key, di.instance_code, di.original_name, di.new_name, di.name_max_length, substr(di.new_name,1, di.name_max_length), di.id
 		from odf_ca_ddata_instance di
-		where di.odf_parent_id = ${vCollectionID} and di.instance_status = 'Original' and nvl(di.new_name,'uma string vazia')!='uma string vazia'
+		where di.odf_parent_id = ${vCollectionID} and di.instance_status = 'Applied'
   </sql:query>
   <core:forEach items="${vCollection.rowsByIndex}" var="row">
     <core:set value="${row[0]}" var="vInstType"/>
@@ -37,7 +37,7 @@
     <core:set value="${row[9]}" var="vInstNewN"/>
     <core:set value="${row[10]}" var="vInstINTL"/>
     <core:if test="${DebugLevel > 0}">
-      <gel:log level="debug" message="Data Instance: ${vInstPKID} will change ${vInstType}:${vInstCode} ${vInstAttr} from ${vInstOrig} to ${vInstName} limit to ${vInstNLen} chars."/>
+      <gel:log level="debug" message="Data Instance: ${vInstPKID} will change ${vInstType}:${vInstCode} ${vInstAttr} from ${vInstNewN} to ${vInstOrig} chars."/>
     </core:if>
 	<core:set var="vWhere">
 		where ${vInstKeyA}='${vInstCode}'
@@ -48,13 +48,13 @@
 		</core:set>
 	</core:if>
     <sql:update escapeText="false">
-		update ${vInstTabl} set ${vInstAttr}='${vInstNewN}'
+		update ${vInstTabl} set ${vInstAttr}='${vInstOrig}'
 		${vWhere}
 	</sql:update>
 	
     <sql:update escapeText="false">
 			update odf_ca_ddata_instance
-			set instance_status = 'Applied'
+			set instance_status = 'Original'
 			where id = ${vInstINTL}
 		</sql:update>
   </core:forEach>

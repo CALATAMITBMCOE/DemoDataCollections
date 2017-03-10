@@ -19,8 +19,28 @@
     <gel:log level="debug" message=">>Persisted DebugLevel: ${DebugLevel}"/>
   </core:if>
   <gel:setDataSource dbId="Niku"/>
-  <sql:update escapeText="false">
-		delete odf_ca_ddata_instance
-		where odf_parent_id = ${vCollectionID}
-	</sql:update>
+  <sql:query escapeText="false" var="vCollection">
+		select dd.ddata_coll_status, dd.code, dd.name
+		from odf_ca_ddata_collection dd
+		where dd.id = ${vCollectionID} 
+  </sql:query>
+  <core:forEach items="${vCollection.rowsByIndex}" var="row">
+    <core:set value="${row[0]}" var="vCollStatus"/>
+    <core:set value="${row[1]}" var="vCollCode"/>
+    <core:set value="${row[2]}" var="vCollName"/>
+    <core:if test="${vCollStatus == 'Applied'}">
+      <gel:log level="error" message="Data Collection: ${vCollName}-${vCollCode}-${vCollectionID} is Applied. Please Revert BEFORE Clearing."/>
+    </core:if>
+	
+    <core:if test="${vCollStatus != 'Applied'}">
+		<core:if test="${DebugLevel > 0}">
+			<gel:log level="debug" message="Data Collection: ${vCollName}-${vCollCode}-${vCollectionID} will be Cleared."/>
+		</core:if>
+		<sql:update escapeText="false">
+			delete odf_ca_ddata_instance
+			where odf_parent_id = ${vCollectionID}
+		</sql:update>
+    </core:if>
+  </core:forEach>
+
 </gel:script>
